@@ -6,13 +6,16 @@ import javax.imageio.ImageIO;
 import lenz.htw.kimpl.Move;
 import lenz.htw.kimpl.net.NetworkClient;
 
-
-public class Client {
+public class Client {	
 
 	static byte[][] board = new byte[8][8];
 	static NetworkClient networkClient;
 	static int playerNumber;
 	static int timeLimit;
+	static vec2[] posP1 = new vec2[6];
+	static vec2[] posP2 = new vec2[6];
+	static vec2[] posP3 = new vec2[6];
+	static vec2[] posP4 = new vec2[6];
 	
 	public static void main(String[] args) {
 		String serverIP = args[0];
@@ -41,6 +44,7 @@ public class Client {
 		timeLimit = networkClient.getTimeLimitInSeconds();
 		createBoard();
 		printBoard();
+		createPlayerPositions();
 	}
 	
 	public static void createBoard(){
@@ -50,6 +54,16 @@ public class Client {
 			board[i][7] = 3;
 			board[0][i] = 4;
 		}
+	}
+	
+	public static void createPlayerPositions(){
+		for(byte i = 0; i < 6; ++i){
+			posP1[i] = new vec2((byte)(1+i), (byte)0); 
+			posP2[i] = new vec2((byte)(7), (byte)(1+i));
+			posP3[i] = new vec2((byte)(1+i), (byte)(7)); 
+			posP4[i] = new vec2((byte)(0), (byte)(1+i)); 
+		}
+		int i = 0;
 	}
 	
 	public static void printBoard(){
@@ -94,6 +108,9 @@ public class Client {
 			for(byte j = 0; j < 8; ++j){
 				if(newBoard[i][j] == movingPlayer)
 					++cnt;
+				if(newBoard[i][j] != movingPlayer && newBoard[i][j] != 0){
+					--cnt;
+				}
 			}
 		}
 		return cnt;
