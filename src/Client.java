@@ -4,12 +4,15 @@ import java.util.Random;
 
 import javax.imageio.ImageIO;
 
+import com.sun.org.apache.xalan.internal.xsltc.compiler.sym;
+
 import lenz.htw.kimpl.Move;
 import lenz.htw.kimpl.net.NetworkClient;
 
 public class Client {	
 
 	static byte[][] board = new byte[8][8];
+
 	static NetworkClient networkClient;
 	static int playerNumber;
 	static int timeLimit;
@@ -17,7 +20,9 @@ public class Client {
 	static Vec2[] posP2 = new Vec2[6];
 	static Vec2[] posP3 = new Vec2[6];
 	static Vec2[] posP4 = new Vec2[6];
+	static Vec2[][] savedMove = new Vec2[1][2];
 	static final byte EMPTY_FIELD = 0;
+	static int depth = 7;
 	
 	public static void main(String[] args) {
 		String serverIP = args[0];
@@ -26,15 +31,65 @@ public class Client {
 			networkClient = new NetworkClient(serverIP, "meinTeamName0", ImageIO.read(new File("logo/hellokitty256.png")));
 			int roundCnt = 0;
 			init();
-						
+			Vec2[] tempPosP1 = new Vec2[6]; 
+			Vec2[] tempPosP2 = new Vec2[6]; 
+			Vec2[] tempPosP3 = new Vec2[6]; 
+			Vec2[] tempPosP4 = new Vec2[6];
+			for(int i = 0; i < 6; i++){
+				tempPosP1[i] = new Vec2((byte)0,(byte)0);
+				tempPosP2[i] = new Vec2((byte)0,(byte)0);
+				tempPosP3[i] = new Vec2((byte)0,(byte)0);
+				tempPosP4[i] = new Vec2((byte)0,(byte)0);
+			}
+			
 			while(true){
 				Move move = networkClient.receiveMove();
+				long milliStart = System.currentTimeMillis();
+				
 				roundCnt++;
 				System.out.println("Started round " + roundCnt);
 				if(move == null){
+					
+					byte[][] tempBoard = new byte[8][8];
+					for(int i = 0; i < 8; ++i){
+						for(int j = 0; j < 8; j++){
+							tempBoard[i][j] = board[i][j];
+						}
+					}
+					
+					for(int i = 0; i < 6; ++i){
+						tempPosP1[i].x = posP1[i].x;
+						tempPosP1[i].y = posP1[i].y;
+						tempPosP2[i].x = posP2[i].x;
+						tempPosP2[i].y = posP2[i].y;
+						tempPosP3[i].x = posP3[i].x;
+						tempPosP3[i].y = posP3[i].y;
+						tempPosP4[i].x = posP4[i].x;
+						tempPosP4[i].y = posP4[i].y;
+					}
+					
+
 					move = calculateMove();
 					networkClient.sendMove(move);
 					System.out.println("\n moving from " + move.fromX + "," + move.fromY + " to " + move.toX + "," + move.toY);
+					System.out.println("Calculation time: " + (System.currentTimeMillis() - milliStart) + " ms");
+					for(int i = 0; i < 8; ++i){
+						for(int j = 0; j < 8; j++){
+							board[i][j] = tempBoard[i][j];
+						}
+					}
+			
+					for(int i = 0; i < 6; ++i){
+						posP1[i].x = tempPosP1[i].x;
+						posP1[i].y = tempPosP1[i].y;
+						posP2[i].x = tempPosP2[i].x;
+						posP2[i].y = tempPosP2[i].y;
+						posP3[i].x = tempPosP3[i].x;
+						posP3[i].y = tempPosP3[i].y;
+						posP4[i].x = tempPosP4[i].x;
+						posP4[i].y = tempPosP4[i].y;
+					}
+					
 					//saveMove(move);
 				}else{
 					saveMove(move);
@@ -54,6 +109,7 @@ public class Client {
 		createBoard();
 		printBoard();
 		createPlayerPositions();
+		savedMove[0][0] = new Vec2((byte)-1,(byte)-1);
 	}
 	
 	public static void createBoard(){
@@ -72,7 +128,6 @@ public class Client {
 			posP3[i] = new Vec2((byte)(1+i), (byte)(7)); 
 			posP4[i] = new Vec2((byte)(0), (byte)(1+i)); 
 		}
-		int i = 0;
 	}
 	
 	public static void printBoard(){
@@ -90,16 +145,22 @@ public class Client {
 		// zug berechnen
 		// Zeit beachten
 		// new Timer().
-		Vec2[][] possibleMoves = generatePossibleMoves((byte) playerNumber);
+		//Vec2[][] possibleMoves = generatePossibleMoves((byte) playerNumber);
 		
+		savedMove[0][0].x = -1;				// mache den zug ungültig
 		
-		
-		Move myNextMove = new Move(possibleMoves[0][0].x, possibleMoves[0][0].y, 
-				possibleMoves[0][1].x, possibleMoves[0][1].y);
-		
-		return myNextMove;
-
+		int rating = miniMax((byte) playerNumber, depth, -1000, 1000);
+		if(savedMove[0][0].x == -1){
+			System.out.println("Debug: Es gab keine weiteren Züge mehr :(");
+			return null;
+		}	
+		else{
+			System.out.println("Debug: Zug hat ein Rating von " + rating);
+			return new Move(savedMove[0][0].x, savedMove[0][0].y, 
+					savedMove[0][1].x, savedMove[0][1].y);
+			}
 	}
+	
 	
 	public static void saveMove(Move move){
 		byte movingPlayer = board[move.fromX][move.fromY];
@@ -107,7 +168,7 @@ public class Client {
 		board[move.toX][move.toY] = movingPlayer;				
 		board[move.fromX][move.fromY] = 0;
 		
-		
+		System.out.println("Saved Move " + move.fromX + "," + move.fromY + " -> " + move.toX + "," + move.toY);
 		switch (killedPlayer){
 		case 1:
 			for(Vec2 stone : posP1){
@@ -137,7 +198,7 @@ public class Client {
 					stone.y = 8;
 				}
 			}
-	}
+		}
 		switch (movingPlayer){
 			case 1:
 				for(Vec2 stone : posP1){
@@ -170,14 +231,14 @@ public class Client {
 		}
 	}
 	
-	public byte rate(byte[][] newBoard, byte movingPlayer){
+	public static byte rate(byte movingPlayer){
 		byte cnt = 0;
 		for(byte i = 0; i < 8; ++i){
 			for(byte j = 0; j < 8; ++j){
-				if(newBoard[i][j] == movingPlayer)					// +1 for own stone
+				if(board[i][j] == movingPlayer)					// +1 for own stone
 					++cnt;
-				if(newBoard[i][j] != movingPlayer 					// -1 for enemy stone
-						&& newBoard[i][j] != EMPTY_FIELD){		
+				if(board[i][j] != movingPlayer 					// -1 for enemy stone
+						&& board[i][j] != EMPTY_FIELD){		
 					--cnt;											
 				}
 			}
@@ -237,7 +298,7 @@ public class Client {
 						++moveCnt;
 					}
 					// Look if we can hit diagonal left
-					if(stone.y < 0  
+					if(stone.y > 0  
 							&& board[stone.x - 1][stone.y - 1] != EMPTY_FIELD
 							&& board[stone.x - 1][stone.y - 1] != movingPlayer){
 						possibleMoves[moveCnt][0] = new Vec2(stone.x, stone.y);
@@ -317,7 +378,7 @@ public class Client {
 						++moveCnt;
 					}
 					// Look if we can hit diagonal right
-					if(stone.y < 0 
+					if(stone.y > 0 
 							&& board[stone.x + 1][stone.y - 1] != EMPTY_FIELD
 							&& board[stone.x + 1][stone.y - 1] != movingPlayer){
 						possibleMoves[moveCnt][0] = new Vec2(stone.x, stone.y);
@@ -341,4 +402,108 @@ public class Client {
 			
 		
 	}
+
+	public static int miniMax(byte movingPlayer, int depth, int alpha, int beta){
+		
+		if(movingPlayer >= 5)
+			movingPlayer = 1;
+		System.out.println("Player: " + movingPlayer + " Depth: " + depth);
+		Vec2[][] possibleMoves = generatePossibleMoves(movingPlayer);
+		
+		if(depth <= 0 || possibleMoves[0][0].x == -1){
+			if(movingPlayer == 1)
+				movingPlayer = 5;
+			return rate(--movingPlayer);
+		}
+		int maxValue = alpha;
+		int i = 0;
+		while(possibleMoves[i][0].x != -1){
+			byte[][] tempBoard = new byte[8][8];
+			for(int k = 0; k < 8; ++k){
+				for(int j = 0; j < 8; j++){
+					tempBoard[k][j] = board[k][j];
+				}
+			}
+			Vec2[] tempPosP1 = new Vec2[6]; 
+			Vec2[] tempPosP2 = new Vec2[6]; 
+			Vec2[] tempPosP3 = new Vec2[6]; 
+			Vec2[] tempPosP4 = new Vec2[6]; 
+
+			for(int k = 0; k < 6; ++k){
+				tempPosP1[k] = new Vec2((byte)0,(byte)0);
+				tempPosP2[k] = new Vec2((byte)0,(byte)0);
+				tempPosP3[k] = new Vec2((byte)0,(byte)0);
+				tempPosP4[k] = new Vec2((byte)0,(byte)0);
+				tempPosP1[k].x = posP1[k].x;
+				tempPosP1[k].y = posP1[k].y;
+				tempPosP2[k].x = posP2[k].x;
+				tempPosP2[k].y = posP2[k].y;
+				tempPosP3[k].x = posP3[k].x;
+				tempPosP3[k].y = posP3[k].y;
+				tempPosP4[k].x = posP4[k].x;
+				tempPosP4[k].y = posP4[k].y;
+			}
+			
+			saveMove(new Move(possibleMoves[i][0].x, possibleMoves[i][0].y,
+					possibleMoves[i][1].x, possibleMoves[i][1].y));
+			printBoard();
+			int value = -1 * miniMax((byte)(movingPlayer + 1), depth - 1, -1 * beta, -1 * maxValue);
+			System.out.println("Value: " + value + " MaxValue: " + maxValue);
+			
+			for(int k = 0; k < 8; ++k){
+				for(int j = 0; j < 8; j++){
+					board[k][j] = tempBoard[k][j];
+				}
+			}
+	
+			for(int k = 0; k < 6; ++k){
+				posP1[k].x = tempPosP1[k].x;
+				posP1[k].y = tempPosP1[k].y;
+				posP2[k].x = tempPosP2[k].x;
+				posP2[k].y = tempPosP2[k].y;
+				posP3[k].x = tempPosP3[k].x;
+				posP3[k].y = tempPosP3[k].y;
+				posP4[k].x = tempPosP4[k].x;
+				posP4[k].y = tempPosP4[k].y;
+			}
+			
+			if(value > maxValue) {
+				maxValue = value;
+				if(maxValue >= beta)
+					break;
+				if(depth == Client.depth){
+					savedMove[0][0] = possibleMoves[i][0];
+					savedMove[0][1] = possibleMoves[i][1];
+					System.out.println("Speichere Zug " + savedMove[0][0].x + "," + savedMove[0][0].y + " -> " 
+					+ savedMove[0][1].x + "," + savedMove[0][1].y);
+					
+				}				
+			}
+			++i;
+		}
+		return maxValue;
+	}
+	/*
+	 int miniMax(int spieler, int tiefe, 
+             int alpha, int beta) {
+    	if (tiefe == 0 or keineZuegeMehr(spieler))
+       		return bewerten(spieler);
+    	int maxWert = alpha;
+    	generiereMoeglicheZuege(spieler);
+    	while (noch Zug da) {
+       		fuehreNaechstenZugAus();
+       		int wert = -miniMax(-spieler, tiefe-1,
+                           -beta, -maxWert);
+       		macheZugRueckgaengig();
+       		if (wert > maxWert) {
+	          maxWert = wert;
+	          if (maxWert >= beta)
+	             break;
+	          if (tiefe == anfangstiefe)
+	             gespeicherterZug = Zug;
+	       	}
+    	}
+    return maxWert;
+ }
+ */
 }
