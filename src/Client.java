@@ -1,10 +1,8 @@
 import java.io.File;
 import java.io.IOException;
-import java.util.Random;
 
 import javax.imageio.ImageIO;
 
-import com.sun.org.apache.xalan.internal.xsltc.compiler.sym;
 
 import lenz.htw.kimpl.Move;
 import lenz.htw.kimpl.net.NetworkClient;
@@ -22,13 +20,13 @@ public class Client {
 	static Vec2[] posP4 = new Vec2[6];
 	static Vec2[][] savedMove = new Vec2[1][2];
 	static final byte EMPTY_FIELD = 0;
-	static int depth = 7;
+	static int depth = 10;
 	
 	public static void main(String[] args) {
 		String serverIP = args[0];
 	
 		try {
-			networkClient = new NetworkClient(serverIP, "meinTeamName0", ImageIO.read(new File("logo/hellokitty256.png")));
+			networkClient = new NetworkClient(serverIP, "neueKI", ImageIO.read(new File("logo/hellokitty256.png")));
 			int roundCnt = 0;
 			init();
 			Vec2[] tempPosP1 = new Vec2[6]; 
@@ -71,8 +69,9 @@ public class Client {
 
 					move = calculateMove();
 					networkClient.sendMove(move);
-					System.out.println("\n moving from " + move.fromX + "," + move.fromY + " to " + move.toX + "," + move.toY);
-					System.out.println("Calculation time: " + (System.currentTimeMillis() - milliStart) + " ms");
+					//System.out.println("\n moving from " + move.fromX + "," + move.fromY + " to " + move.toX + "," + move.toY);
+					long calcTime = (System.currentTimeMillis() - milliStart);
+					System.out.println("Calculation time: " + calcTime + " ms" + " Depth: " + depth);
 					for(int i = 0; i < 8; ++i){
 						for(int j = 0; j < 8; j++){
 							board[i][j] = tempBoard[i][j];
@@ -89,12 +88,13 @@ public class Client {
 						posP4[i].x = tempPosP4[i].x;
 						posP4[i].y = tempPosP4[i].y;
 					}
-					
+					if(calcTime < 300)
+						depth++;
 					//saveMove(move);
 				}else{
 					saveMove(move);
 				}
-				printBoard();
+				//printBoard();
 			}
 		} catch (IOException e){
 			throw new RuntimeException("", e);
@@ -168,7 +168,7 @@ public class Client {
 		board[move.toX][move.toY] = movingPlayer;				
 		board[move.fromX][move.fromY] = 0;
 		
-		System.out.println("Saved Move " + move.fromX + "," + move.fromY + " -> " + move.toX + "," + move.toY);
+		//System.out.println("Saved Move " + move.fromX + "," + move.fromY + " -> " + move.toX + "," + move.toY);
 		switch (killedPlayer){
 		case 1:
 			for(Vec2 stone : posP1){
@@ -231,19 +231,121 @@ public class Client {
 		}
 	}
 	
-	public static byte rate(byte movingPlayer){
-		byte cnt = 0;
+	public static int rate(byte movingPlayer){
+		//Anzahl der eigenen Steine +1
+		//Anzahl der gegnerischen Stein -1
+		//TODO: blockierte Steine - endgültig - selbst +1
+		//									  - Gegner -1
+		//					- vorübergehend - selbst -2
+		//									- Gegner +2
+		//Entfernung zum Startpunkt - selbst - je näher desto besser (am start 7 pkte, pro reihe weg - 1)
+		//							- gegner - je näher desto besser (am start -7 pkt, pro reihe weg + 1)
+		//Gewichtung der Kriterien
+		byte ownStones = 0;
+		byte ownStonesWeighting = 1;
+		byte enemyStones = 0;
+		byte enemyStonesWeighting = -1;
+		byte blockedStonesPlayer1 = 0;
+		byte blockedStonesPlayer2 = 0;
+		byte blockedStonesPlayer3 = 0;
+		byte blockedStonesPlayer4 = 0;
+		byte tempBlockedStonesPlayer1 = 0;
+		byte tempBlockedStonesPlayer2 = 0;
+		byte tempBlockedStonesPlayer3 = 0;
+		byte tempBlockedStonesPlayer4 = 0;
+		byte ownBlockedStones = 0;
+		byte enemyBlockedStones = 0;
+		byte tempOwnBlockedStones = 0;
+		byte tempEnemyBlockedStones = 0;
+		byte ownBlockedStonesWeighting = 1;
+		byte tempOwnBlockedStonesWeighting = -2;
+		byte enemyBlockedStonesWeighting = -1;
+		byte tempEnemyBlockedStonesWeighting = 2;
+		byte distancePlayer1 = 0;
+		byte distancePlayer2 = 0;
+		byte distancePlayer3 = 0;
+		byte distancePlayer4 = 0;
+		byte distanceOwn = 0;
+		byte distanceEnemy = 0;
+		byte distanceOwnWeighting = 1;
+		byte distanceEnemyWeighting = -1;
+		
 		for(byte i = 0; i < 8; ++i){
 			for(byte j = 0; j < 8; ++j){
-				if(board[i][j] == movingPlayer)					// +1 for own stone
-					++cnt;
+				if(board[i][j] == movingPlayer)	{				// +1 for own stone
+					++ownStones;
+				}
+				if(board[i][j] == 1){
+					if(j == 7)
+						blockedStonesPlayer1++;
+					else if(board[i][j+1] != EMPTY_FIELD)
+						tempBlockedStonesPlayer1++;
+					distancePlayer1 += (7 - j);
+				}else if(board[i][j] == 2){
+					if(i == 0)
+						blockedStonesPlayer2++;
+					else if(board[i-1][j] != EMPTY_FIELD)
+						tempBlockedStonesPlayer2++;
+					distancePlayer2 += i;
+				}else if(board[i][j] == 3){
+					if(j == 0)
+						blockedStonesPlayer3++;	
+					else if(board[i][j-1] != EMPTY_FIELD)
+						tempBlockedStonesPlayer3++;
+					distancePlayer3 += j;
+				}else if(board[i][j] == 4){
+					if(i == 7)
+						blockedStonesPlayer4++;	
+					else if(board[i+1][j] != EMPTY_FIELD)
+						tempBlockedStonesPlayer4++;
+					distancePlayer4 += (7 - i);
+				}
+				
 				if(board[i][j] != movingPlayer 					// -1 for enemy stone
 						&& board[i][j] != EMPTY_FIELD){		
-					--cnt;											
+					++enemyStones;											
 				}
 			}
 		}
-		return cnt;
+		if(movingPlayer == 1){
+			ownBlockedStones = blockedStonesPlayer1;
+			tempOwnBlockedStones = tempBlockedStonesPlayer1;
+			enemyBlockedStones = (byte)(blockedStonesPlayer2 + blockedStonesPlayer3 + blockedStonesPlayer4);
+			tempEnemyBlockedStones = (byte)(tempBlockedStonesPlayer2 + tempBlockedStonesPlayer3 + tempBlockedStonesPlayer4);
+			distanceOwn = distancePlayer1;
+			distanceEnemy = (byte) (distancePlayer2 + distancePlayer3 + distancePlayer4);
+		}else if(movingPlayer == 2){
+			ownBlockedStones = blockedStonesPlayer2;
+			tempOwnBlockedStones = tempBlockedStonesPlayer2;
+			enemyBlockedStones = (byte)(blockedStonesPlayer1 + blockedStonesPlayer3 + blockedStonesPlayer4);
+			tempEnemyBlockedStones = (byte)(tempBlockedStonesPlayer1 + tempBlockedStonesPlayer3 + tempBlockedStonesPlayer4);
+			distanceOwn = distancePlayer2;
+			distanceEnemy = (byte) (distancePlayer1 + distancePlayer3 + distancePlayer4);
+		}
+		else if(movingPlayer == 3){
+			ownBlockedStones = blockedStonesPlayer3;
+			tempOwnBlockedStones = tempBlockedStonesPlayer3;
+			enemyBlockedStones = (byte)(blockedStonesPlayer1 + blockedStonesPlayer2 + blockedStonesPlayer4);
+			tempEnemyBlockedStones = (byte)(tempBlockedStonesPlayer1 + tempBlockedStonesPlayer2 + tempBlockedStonesPlayer4);
+			distanceOwn = distancePlayer3;
+			distanceEnemy = (byte) (distancePlayer1 + distancePlayer2 + distancePlayer4);
+		}
+		else if(movingPlayer == 4){
+			ownBlockedStones = blockedStonesPlayer4;
+			tempOwnBlockedStones = tempBlockedStonesPlayer4;
+			enemyBlockedStones = (byte)(blockedStonesPlayer1 + blockedStonesPlayer2 + blockedStonesPlayer3);
+			tempEnemyBlockedStones = (byte)(tempBlockedStonesPlayer1 + tempBlockedStonesPlayer2 + tempBlockedStonesPlayer3);
+			distanceOwn = distancePlayer4;
+			distanceEnemy = (byte) (distancePlayer1 + distancePlayer2 + distancePlayer3);
+		}
+		return ownStones * ownStonesWeighting 
+				+ enemyStones * enemyStonesWeighting
+				+ ownBlockedStones * ownBlockedStonesWeighting
+				+ tempOwnBlockedStones * tempOwnBlockedStonesWeighting
+				+ enemyBlockedStones * enemyBlockedStonesWeighting
+				+ tempEnemyBlockedStones * tempEnemyBlockedStonesWeighting
+				+ distanceOwn * distanceOwnWeighting
+				+ distanceEnemy * distanceEnemyWeighting;
 	}
 
 	public static Vec2[][] generatePossibleMoves(byte movingPlayer){
@@ -278,13 +380,14 @@ public class Client {
 						++moveCnt;
 					}
 				}
-				// indicate end of array
+				/*
 				System.out.println("Debug: Created " + moveCnt + " moves for player " + movingPlayer);
 				for(int i = 0; i < moveCnt; ++i){
 					System.out.println(possibleMoves[i][0].x + "," + possibleMoves[i][0].y + " -> " + possibleMoves[i][1].x + "," + possibleMoves[i][1].y);
 				}
+				*/
 				if(moveCnt <= possibleMoves.length)
-					possibleMoves[moveCnt][0] = new Vec2((byte) -1, (byte) -1);
+					possibleMoves[moveCnt][0] = new Vec2((byte) -1, (byte) -1);			// indicate end of array
 				return possibleMoves;
 			case 2:
 				for(Vec2 stone : posP2){
@@ -314,13 +417,14 @@ public class Client {
 						++moveCnt;
 					}
 				}
-				// indicate end of array
+				/*
 				System.out.println("Debug: Created " + moveCnt + " moves for player " + movingPlayer);
 				for(int i = 0; i < moveCnt; ++i){
 					System.out.println(possibleMoves[i][0].x + "," + possibleMoves[i][0].y + " -> " + possibleMoves[i][1].x + "," + possibleMoves[i][1].y);
 				}
+				*/
 				if(moveCnt <= possibleMoves.length)
-					possibleMoves[moveCnt][0] = new Vec2((byte) -1, (byte) -1);
+					possibleMoves[moveCnt][0] = new Vec2((byte) -1, (byte) -1);			// indicate end of array
 				return possibleMoves;
 			case 3:
 				for(Vec2 stone : posP3){
@@ -350,13 +454,14 @@ public class Client {
 						++moveCnt;
 					}
 				}
-				// indicate end of array
+				/*
 				System.out.println("Debug: Created " + moveCnt + " moves for player " + movingPlayer);
 				for(int i = 0; i < moveCnt; ++i){
 					System.out.println(possibleMoves[i][0].x + "," + possibleMoves[i][0].y + " -> " + possibleMoves[i][1].x + "," + possibleMoves[i][1].y);
 				}
+				*/
 				if(moveCnt <= possibleMoves.length)
-					possibleMoves[moveCnt][0] = new Vec2((byte) -1, (byte) -1);
+					possibleMoves[moveCnt][0] = new Vec2((byte) -1, (byte) -1);		// indicate end of array
 				return possibleMoves;
 			case 4:
 				for(Vec2 stone : posP4){
@@ -387,12 +492,14 @@ public class Client {
 					}
 				}
 				// indicate end of array
+				/*
 				System.out.println("Debug: Created " + moveCnt + " moves for player " + movingPlayer);
 				for(int i = 0; i < moveCnt; ++i){
 					System.out.println(possibleMoves[i][0].x + "," + possibleMoves[i][0].y + " -> " + possibleMoves[i][1].x + "," + possibleMoves[i][1].y);
 				}
+				*/
 				if(moveCnt <= possibleMoves.length)
-					possibleMoves[moveCnt][0] = new Vec2((byte) -1, (byte) -1);
+					possibleMoves[moveCnt][0] = new Vec2((byte) -1, (byte) -1);		// indicate end of array
 				return possibleMoves;
 			default:
 				System.out.println("Debug: Falsche Spielernummer beim Generieren angegeben");
@@ -407,7 +514,7 @@ public class Client {
 		
 		if(movingPlayer >= 5)
 			movingPlayer = 1;
-		System.out.println("Player: " + movingPlayer + " Depth: " + depth);
+		//System.out.println("Player: " + movingPlayer + " Depth: " + depth);
 		Vec2[][] possibleMoves = generatePossibleMoves(movingPlayer);
 		
 		if(depth <= 0 || possibleMoves[0][0].x == -1){
@@ -446,9 +553,9 @@ public class Client {
 			
 			saveMove(new Move(possibleMoves[i][0].x, possibleMoves[i][0].y,
 					possibleMoves[i][1].x, possibleMoves[i][1].y));
-			printBoard();
+			//printBoard();
 			int value = -1 * miniMax((byte)(movingPlayer + 1), depth - 1, -1 * beta, -1 * maxValue);
-			System.out.println("Value: " + value + " MaxValue: " + maxValue);
+			//System.out.println("Value: " + value + " MaxValue: " + maxValue);
 			
 			for(int k = 0; k < 8; ++k){
 				for(int j = 0; j < 8; j++){
@@ -483,27 +590,4 @@ public class Client {
 		}
 		return maxValue;
 	}
-	/*
-	 int miniMax(int spieler, int tiefe, 
-             int alpha, int beta) {
-    	if (tiefe == 0 or keineZuegeMehr(spieler))
-       		return bewerten(spieler);
-    	int maxWert = alpha;
-    	generiereMoeglicheZuege(spieler);
-    	while (noch Zug da) {
-       		fuehreNaechstenZugAus();
-       		int wert = -miniMax(-spieler, tiefe-1,
-                           -beta, -maxWert);
-       		macheZugRueckgaengig();
-       		if (wert > maxWert) {
-	          maxWert = wert;
-	          if (maxWert >= beta)
-	             break;
-	          if (tiefe == anfangstiefe)
-	             gespeicherterZug = Zug;
-	       	}
-    	}
-    return maxWert;
- }
- */
 }
